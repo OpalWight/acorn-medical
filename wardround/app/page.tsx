@@ -275,7 +275,7 @@ export default function WardPage() {
         return false;
       }
       update(result as Snapshot);
-      if (!["advance", "play", "pause"].includes(command.type)) setNotice(offline ? "Change saved in this browser." : "Change saved to the shared ward.");
+      if (!["advance", "play", "pause", "dawn"].includes(command.type)) setNotice(offline ? "Change saved in this browser." : "Change saved to the shared ward.");
       return true;
     } catch {
       setActionError(offline ? "Could not save in this browser. Try again." : "Connection interrupted. Try again.");
@@ -347,6 +347,7 @@ export default function WardPage() {
       {board && view === "calendar" && <ShiftCalendar key={calendarKey} board={board} busy={busy} onSelect={pickPatient} onAdd={(id, start, duration) => { pickPatient(id); setStartAdding({ start, duration }); }}
         approveDrafts={role === "physician" && drafts ? () => void act({ type: "approveShift" }) : undefined}
         toggle={toggleClock} advance={advanceClock}
+        dawn={role === "physician" ? async () => { if (await act({ type: "dawn" })) setCalendarKey((key) => key + 1); } : undefined}
         reset={role === "physician" ? () => { if (window.confirm(offline ? "Reset the demo clock and clear changes in this browser?" : "Reset the shared demo clock and clear demo changes?")) void act({ type: "reset" }); } : undefined} />}
       {board && view === "patients" && <PatientsView board={board} busy={busy} toggle={toggleClock} advance={advanceClock} onSelect={pickPatient} />}
       {board && view === "agenda" && <>

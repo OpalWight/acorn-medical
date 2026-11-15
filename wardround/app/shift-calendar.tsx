@@ -21,8 +21,8 @@ export function ShiftClock({ now, playing, busy, toggle, advance, children }: {
   </div>;
 }
 
-export function ShiftCalendar({ board, busy, reset, toggle, advance, approveDrafts, onSelect, onAdd }: {
-  board: Snapshot; busy: boolean; reset?: () => void; toggle: () => void; advance: () => void; approveDrafts?: () => void;
+export function ShiftCalendar({ board, busy, reset, dawn, toggle, advance, approveDrafts, onSelect, onAdd }: {
+  board: Snapshot; busy: boolean; reset?: () => void; dawn?: () => void; toggle: () => void; advance: () => void; approveDrafts?: () => void;
   onSelect: (patientId: string, taskId?: string) => void; onAdd: (patientId: string, minute: number, duration?: number) => void;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -81,6 +81,7 @@ export function ShiftCalendar({ board, busy, reset, toggle, advance, approveDraf
         {Object.entries(TASK_KINDS).map(([kind, label]) => <span key={kind} className={`kind-${kind}`}><i />{label}</span>)}
       </div>
       <ShiftClock now={board.now} playing={board.playing} busy={busy} toggle={toggle} advance={advance}>
+        {dawn && <Button variant="outline" size="sm" disabled={busy} onClick={dawn}>4:55 AM demo</Button>}
         {reset && <Button variant="outline" size="icon-sm" disabled={busy} onClick={reset} aria-label="Reset shift" title="Reset shift"><RotateCcw /></Button>}
         {approveDrafts && <Button size="sm" disabled={busy} onClick={approveDrafts}>Approve shift drafts</Button>}
       </ShiftClock>

@@ -274,3 +274,13 @@ test("the demo atorvastatin can move only within its simulated medication order"
   assert.equal(statin.recommendation.readyNow, true);
   assert.throws(() => change({ type: "edit", provider: "physician", id: statin.id, time: 391 }, state), /authorized window/);
 });
+
+test("the dawn shortcut pauses the clock at 4:55 AM and keeps saved care", () => {
+  const state = initialState();
+  state.clock = { minute: 600, playingSince: wallTime - 60_000 };
+  state.plan.cmp = { time: 375, by: "nurse", locked: false };
+  state.completed.flex = 370;
+  const replay = change({ type: "dawn", provider: "physician" }, state);
+  assert.deepEqual(replay, { ...state, clock: { minute: START, playingSince: null } });
+  assert.throws(() => change({ type: "dawn", provider: "student" }, state), /physician/);
+});

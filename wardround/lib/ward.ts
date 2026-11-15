@@ -256,7 +256,7 @@ export function studentRoute(board: Snapshot) {
 }
 
 export type Action = {
-  type: "addTask" | "priority" | "approve" | "edit" | "acceptProposal" | "approveShift" | "lock" | "deadline" | "visit" | "complete" | "advance" | "play" | "pause" | "reset";
+  type: "addTask" | "priority" | "approve" | "edit" | "acceptProposal" | "approveShift" | "lock" | "deadline" | "visit" | "complete" | "advance" | "play" | "pause" | "dawn" | "reset";
   provider: Provider; version: number; id?: string; room?: string; time?: number; urgency?: Urgency; draft?: TaskDraft;
 };
 export function canChange(role: Role, task: Snapshot["tasks"][number]) {
@@ -352,6 +352,10 @@ export function applyAction(state: WardState, action: Action, wallTime: number, 
     case "reset":
       if (role !== "physician") throw new Error("A physician can restart the shared demo.");
       return initialState();
+    case "dawn":
+      if (role !== "physician") throw new Error("A physician can move the shared clock to the dawn demo.");
+      next.clock = { minute: START, playingSince: null };
+      break;
     case "advance":
       next.clock = { minute: Math.min(END, now + 5), playingSince: board.playing ? wallTime : null };
       break;

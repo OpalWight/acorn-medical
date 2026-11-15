@@ -237,6 +237,7 @@ tr:hover td { background: #f3faf7; }
 .event-meta svg { width: 11px; height: 11px; }
 .event-state { display: inline-flex; align-items: center; gap: 3px; }
 .event-cue { padding: 0 3px; border-color: var(--task-line); border-radius: 3px; color: inherit; background: var(--paper); font-size: 8px; line-height: 1.15; }
+.event-ready { border-color: var(--accent-line); color: var(--accent); background: var(--selected); }
 .calendar-event.event-draft { border-style: dashed; border-left-style: solid; }
 .calendar-event.event-done { opacity: .78; }
 .calendar-key { display: flex; gap: 6px 12px; flex-wrap: wrap; padding: 6px 0; color: var(--muted); font-size: 10px; }

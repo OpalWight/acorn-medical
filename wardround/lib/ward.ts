@@ -21,7 +21,7 @@ export type ReadSleep = (patientId: string, minute: number) => {
   stage: Stage;
 };
 
-export const START = 120;
+export const START = 295;
 export const END = 1440;
 const PREROUNDS = { start: 240, end: 360 };
 const ROUNDS = { start: 420, end: 720 };
@@ -41,7 +41,7 @@ const SLEEP_COST: Record<Stage, number> = { Awake: 0, "Light sleep": 1, "Deep sl
 
 export const PATIENTS = [
   { id: "th", name: "Thomas Hayes", initials: "TH", room: "401", context: "Pneumonia observation", color: "plum", corridor: 1, urgency: "critical", pulse: 88, nurse: "nurse" },
-  { id: "mr", name: "Marcus Reed", initials: "MR", room: "403", context: "Postoperative observation", color: "blue", corridor: 3, urgency: "elevated", pulse: 72, nurse: "nurse-east" },
+  { id: "mr", name: "Marcus Reed", initials: "MR", room: "403", context: "Postoperative observation", color: "blue", corridor: 3, urgency: "routine", pulse: 72, nurse: "nurse-east" },
   { id: "np", name: "Nina Patel", initials: "NP", room: "407", context: "Chemotherapy observation", color: "violet", corridor: 7, urgency: "routine", pulse: 64, nurse: "nurse" },
   { id: "er", name: "Elena Rivera", initials: "ER", room: "409", context: "Dehydration observation", color: "teal", corridor: 8, urgency: "routine", pulse: 68, nurse: "nurse-east" },
   { id: "jw", name: "James Wilson", initials: "JW", room: "412", context: "Heart failure observation", color: "sand", corridor: 11, urgency: "routine", pulse: 70, nurse: "nurse-east" },
@@ -79,6 +79,9 @@ export const TASKS: Task[] = [
   { id: "overnight-med", patient: "mr", label: "Scheduled medication", kind: "medication", role: "nurse", urgency: "elevated", earliest: 120, latest: 120, baseline: 120, duration: 4, note: "Fixed 2:00 AM start per simulated order.", approved: true },
   { id: "afternoon-mobility", patient: "er", label: "Mobility check", kind: "visit", role: "nurse", urgency: "routine", earliest: 840, latest: 910, baseline: 870, duration: 10, note: "Assist with mobility when the patient is available.", approved: true },
   { id: "late-check", patient: "np", label: "Late comfort check", kind: "visit", role: "nurse", urgency: "routine", earliest: 1390, latest: 1425, baseline: 1395, duration: 5, note: "Bedside comfort check with a flexible window before midnight.", approved: true },
+  { id: "before-dawn-nina", patient: "np", label: "Bedside check", kind: "assessment", role: "nurse", urgency: "routine", earliest: 295, latest: 320, baseline: 295, duration: 4, note: "This routine check can start whenever Nina is ready within the allowed window.", approved: true },
+  { id: "before-dawn-marcus", patient: "mr", label: "Bedside check", kind: "assessment", role: "nurse", urgency: "routine", earliest: 295, latest: 320, baseline: 295, duration: 4, note: "This routine check can wait for a lighter sleep stage within the allowed window." },
+  { id: "routine-statin", patient: "er", label: "Routine atorvastatin", kind: "medication", role: "nurse", urgency: "routine", earliest: 300, latest: 390, baseline: 315, duration: 4, note: "The window is set by the simulated care order. U.S. labeling permits once-daily atorvastatin at any time of day, with or without food, so the demo order allows time to wait for a lighter sleep stage.", approved: true },
   { id: "resp", patient: "th", label: "Respiratory assessment", kind: "assessment", role: "physician", urgency: "critical", earliest: 300, latest: 300, baseline: 300, duration: 10, note: "Immediate bedside assessment entered by the care team", approved: true },
   { id: "med", patient: "mr", label: "Time-critical medication", kind: "medication", role: "nurse", urgency: "critical", earliest: 360, latest: 360, baseline: 360, duration: 4, note: "Exact start per simulated order", approved: true },
   { id: "cmp", patient: "np", label: "Daily CMP draw", kind: "lab", role: "nurse", urgency: "routine", earliest: 360, latest: 409, baseline: 365, duration: 6, note: "Collection pending · result pending", approved: true },
@@ -153,15 +156,17 @@ function suggest(task: Task, baseline: number, now: number, stage: Stage, urgenc
     return { time: deferred, sleepDelay: true, reason: "Patient is in deep sleep. Consider a short delay and recheck sleep status before the visit." };
   }
   const earlier = Math.max(earliest, baseline - 15);
-  if ((stage === "Awake" || stage === "Light sleep") && earlier < planned && earlier < recheck) {
-    return { time: earlier, sleepAdvance: true, reason: "The patient is awake or in light sleep now." };
+  if ((stage === "Awake" || stage === "Light sleep") && (planned === now || (earlier < planned && earlier < recheck))) {
+    return { time: earlier, sleepAdvance: earlier < planned, readyNow: earlier === now,
+      reason: stage === "Awake" ? "The patient is awake now." : "The patient is in light sleep now." };
   }
   return { time: planned, reason: planned > baseline ? "Next available start inside the task window." : "Planned time fits the task window." };
 }
 
 function buildBoard(state: WardState, wallTime: number, version: number, readSleep: ReadSleep, provider: Provider) {
-  const untouchedMorning = version === 0 && state.clock.minute === 300 && state.clock.playingSince === null && !state.plan["overnight-lab"];
-  const now = untouchedMorning ? START : clockMinute(state, wallTime);
+  const untouchedDemo = version === 0 && state.clock.playingSince === null && !state.plan["before-dawn-nina"] &&
+    (state.clock.minute === 120 || state.clock.minute === 300);
+  const now = untouchedDemo ? START : clockMinute(state, wallTime);
   const sleepScores = new Map<string, number>();
   const careTasks = [...TASKS, ...(state.addedTasks ?? [])];
   const roster = PATIENTS.filter((patient) => provider === "physician" || NURSING_COVERAGE.some(({ start }) => provider === assignedNurse(patient.nurse, start)) ||
@@ -215,7 +220,8 @@ function rankVisits(board: ReturnType<typeof buildBoard>["board"], sleepScores: 
     }
     const task = board.tasks.filter((item) => item.patient === patient.id && item.completedAt === undefined && item.latest >= board.now &&
         (board.provider === "physician" || item.assignedTo === board.provider))
-      .sort((a, b) => RANK[a.priority] - RANK[b.priority] || a.latest - b.latest)[0];
+      .sort((a, b) => Number(a.earliest > board.now) - Number(b.earliest > board.now) ||
+        RANK[a.priority] - RANK[b.priority] || a.latest - b.latest)[0];
     if (!task) return [];
     return [{ patient, task: task.label, taskId: task.id, urgency: task.priority, time: task.approval?.time ?? task.recommendation.time ?? task.baseline,
       latest: task.latest, walk, sleep: SLEEP_COST[patient.signal.stage], immediate: false }];

@@ -64,7 +64,7 @@ test("staff-assigned rapid decline takes priority over sleep and walking", () =>
 
 test("a routine light-sleep visit takes precedence over an equally due deep-sleep visit", () => {
   const start = view(morning(), "nurse-night-east");
-  const routine = start.visits.filter((visit) => visit.urgency === "routine");
+  const routine = start.visits.filter((visit) => visit.taskId === "check" || visit.taskId === "check-e");
   assert.deepEqual(routine.map((visit) => visit.patient.id), ["jw", "er"]);
   assert.equal(routine[0].latest, routine[1].latest);
   assert.ok(routine[0].walk > routine[1].walk);
@@ -77,7 +77,7 @@ test("two deep-sleep visits are ranked by the backend scores before walking dist
   const deep = snapshot(morning(), wallTime, 0, (patient, minute) => patient === "jw"
     ? { stage: "Deep sleep", deepSleepScore: 55 }
     : syntheticReading(patient, minute), "nurse-night-east");
-  const routine = deep.visits.filter((visit) => visit.urgency === "routine");
+  const routine = deep.visits.filter((visit) => visit.taskId === "check" || visit.taskId === "check-e");
   assert.deepEqual(routine.map((visit) => visit.patient.id), ["jw", "er"]);
   assert.ok(routine.every((visit) => visit.patient.signal.stage === "Deep sleep"));
 });
@@ -194,12 +194,13 @@ test("students propose their own routine work and assignment can add a patient t
   assert.equal(task(id, proposed).approval, undefined);
 });
 
-test("the 24-hour schedule starts with overnight examples that preserve order windows", () => {
-  const board = view(initialState());
+test("the 2 AM overnight examples preserve order windows", () => {
+  const state = initialState();
+  state.clock.minute = 120;
+  const board = view(state);
   const lab = board.tasks.find((item) => item.id === "overnight-lab")!;
   const vitals = board.tasks.find((item) => item.id === "overnight-vitals")!;
   const medication = board.tasks.find((item) => item.id === "overnight-med")!;
-  assert.equal(board.now, START);
   assert.equal(board.now, 120);
   assert.equal(lab.approval?.time, 120);
   assert.equal(lab.recommendation.time, 135);
@@ -231,10 +232,45 @@ test("nursing coverage spans the entire day and moving a task across handoff cha
 
 test("a legacy morning board gets the night fixtures while saved changes keep their time", () => {
   const prior = morning();
+  delete prior.plan["before-dawn-nina"];
   delete prior.plan["overnight-lab"];
   delete prior.plan["overnight-med"];
   assert.equal(snapshot(prior, wallTime, 0, syntheticReading).now, START);
   const edited = snapshot(prior, wallTime, 1, syntheticReading);
   assert.equal(edited.now, 300);
   assert.equal(edited.tasks.find((item) => item.id === "overnight-med")?.approval?.locked, true);
+});
+
+test("the demo offers Nina's matching bedside check first and offers Marcus once his stage changes", () => {
+  const state = initialState();
+  const before = view(state);
+  assert.equal(before.now, 295);
+  const marcus = before.patients.find((patient) => patient.id === "mr")!;
+  const nina = before.patients.find((patient) => patient.id === "np")!;
+  assert.equal(marcus.signal.stage, "Deep sleep");
+  assert.equal(nina.signal.stage, "Light sleep");
+  const checks = before.visits.filter((visit) => visit.taskId?.startsWith("before-dawn-"));
+  assert.deepEqual(checks.map((visit) => visit.taskId), ["before-dawn-nina", "before-dawn-marcus"]);
+  assert.equal(checks[0].latest, checks[1].latest);
+  assert.equal(task("before-dawn-nina", state).recommendation.readyNow, true);
+  assert.equal(task("before-dawn-marcus", state).recommendation.sleepDelay, true);
+
+  const advanced = change({ type: "advance", provider: "physician" }, state);
+  assert.equal(view(advanced).patients.find((patient) => patient.id === "mr")?.signal.stage, "Light sleep");
+  const after = task("before-dawn-marcus", advanced);
+  assert.equal(after.recommendation.time, 300);
+  assert.equal(after.recommendation.readyNow, true);
+  assert.equal(after.recommendation.sleepDelay, undefined);
+  assert.equal(task("med", advanced).approval?.time, 360);
+});
+
+test("the demo atorvastatin can move only within its simulated medication order", () => {
+  const state = initialState();
+  state.clock.minute = 310;
+  const statin = task("routine-statin", state);
+  assert.deepEqual([statin.earliest, statin.latest], [300, 390]);
+  assert.equal(statin.approval?.time, 315);
+  assert.equal(statin.recommendation.time, 310);
+  assert.equal(statin.recommendation.readyNow, true);
+  assert.throws(() => change({ type: "edit", provider: "physician", id: statin.id, time: 391 }, state), /authorized window/);
 });

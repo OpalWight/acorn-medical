@@ -130,7 +130,9 @@ export function ShiftCalendar({ board, busy, reset, toggle, advance, approveDraf
             const sleepDelay = task.revision && task.recommendation.sleepDelay;
             const sleepAdvance = task.revision && task.recommendation.sleepAdvance;
             const moveTo = task.approval && (sleepDelay || sleepAdvance) ? task.recommendation.time : null;
-            const cue = urgent ? "Urgent" : moveTo !== null ? `→ ${timeLabel(moveTo)}` : sleepDelay ? "Sleep delay" : sleepAdvance ? "Earlier visit" : fixed ? "Fixed" : undefined;
+            const readyNow = !completed && !task.approval?.locked && task.recommendation.readyNow;
+            const cue = urgent ? "Urgent" : moveTo !== null ? `→ ${timeLabel(moveTo)}` : readyNow ? "Available now"
+              : sleepDelay ? "Sleep delay" : sleepAdvance ? "Earlier visit" : fixed ? "Fixed" : undefined;
             const moveLabel = moveTo === null ? cue : `${sleepDelay ? "Sleep delay" : "Earlier visit"} suggested for ${timeLabel(moveTo)}`;
             const description = [task.label, patient.name, timeLabel(time), status, moveLabel === status ? undefined : moveLabel].filter(Boolean).join(", ");
             const appearance = completed ? "event-done" : draft ? "event-draft" : "";
@@ -140,7 +142,7 @@ export function ShiftCalendar({ board, busy, reset, toggle, advance, approveDraf
               aria-label={description}>
               <span className="event-meta"><time>{timeLabel(time)}</time>
                 <span className="event-state">
-                  {cue && lanes === 1 && <Badge variant="outline" className="event-cue">{cue}</Badge>}
+                  {cue && lanes === 1 && <Badge variant="outline" className={cue === "Available now" ? "event-cue event-ready" : "event-cue"}>{cue}</Badge>}
                   {completed ? <Check size={12} /> : fixed || task.approval?.locked ? <LockKeyhole size={12} /> : hasRevision || sleepDelay || sleepAdvance ? <ArrowUpRight size={13} /> : null}
                 </span>
               </span>

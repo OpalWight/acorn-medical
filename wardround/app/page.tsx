@@ -200,7 +200,8 @@ function PatientDialog({ patient, board, role, taskId, startAdding, returnFocus,
             {!complete && !fixed && task.approval && task.revision && suggested !== null && <div><small>Live suggestion</small><strong>{timeLabel(suggested)}</strong></div>}
             {!complete && task.proposedAt !== undefined && <div><small>Student proposal</small><strong>{timeLabel(task.proposedAt)}</strong></div>}
           </div>
-          {!complete && !fixed && (task.revision || task.latest < board.now) && <p className="task-reason">{task.recommendation.reason}</p>}
+          {!complete && !fixed && (task.revision || task.latest < board.now || task.recommendation.readyNow && !task.approval?.locked) &&
+            <p className="task-reason">{task.recommendation.reason}</p>}
           {complete || <div className="task-actions">
             {task.revision && changeable && suggested !== null && <button className="button solid" disabled={busy} onClick={() => void onAction({ type: "approve", id: task.id, time: suggested })}>{role === "student" ? "Propose suggestion" : "Approve suggestion"}</button>}
             {changeable && role !== "student" && task.proposedAt !== undefined && task.proposedAt >= board.now && <button className="button solid" disabled={busy} onClick={() => void onAction({ type: "acceptProposal", id: task.id })}>Approve proposal</button>}

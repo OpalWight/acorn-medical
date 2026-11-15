@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { syntheticReading } from "../lib/synthetic-sleep.ts";
-import { applyAction, END, initialState, NURSING_COVERAGE, SHIFT_PERIODS, snapshot, START, studentRoute, walking, type Action, type Provider } from "../lib/ward.ts";
+import { applyAction, END, initialState, NURSING_COVERAGE, snapshot, START, studentRoute, walking, type Action, type Provider } from "../lib/ward.ts";
 
 const wallTime = 100_000;
 const morning = () => {
@@ -212,11 +212,9 @@ test("the 24-hour schedule starts with overnight examples that preserve order wi
 });
 
 test("nursing coverage spans the entire day and moving a task across handoff changes its assignee", () => {
-  for (const periods of [NURSING_COVERAGE, SHIFT_PERIODS]) {
-    assert.equal(periods[0].start, 0);
-    assert.equal(periods.at(-1)?.end, END);
-    for (let i = 1; i < periods.length; i++) assert.equal(periods[i - 1].end, periods[i].start);
-  }
+  assert.equal(NURSING_COVERAGE[0].start, 0);
+  assert.equal(NURSING_COVERAGE.at(-1)?.end, END);
+  for (let i = 1; i < NURSING_COVERAGE.length; i++) assert.equal(NURSING_COVERAGE[i - 1].end, NURSING_COVERAGE[i].start);
   const draft = { label: "Handoff vitals", kind: "assessment", role: "nurse", urgency: "routine",
     earliest: 410, latest: 435, baseline: 414, duration: 5, note: "" } as const;
   const added = change({ type: "addTask", provider: "physician", id: "er", draft });

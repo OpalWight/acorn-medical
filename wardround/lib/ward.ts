@@ -23,16 +23,8 @@ export type ReadSleep = (patientId: string, minute: number) => {
 
 export const START = 120;
 export const END = 1440;
-const PREROUNDS = { label: "Prerounds", hours: "4–6 AM", start: 240, end: 360 } as const;
-const ROUNDS = { label: "Rounds", hours: "7 AM–noon", start: 420, end: 720 } as const;
-export const SHIFT_PERIODS = [
-  { label: "Overnight", hours: "Midnight–4 AM", start: 0, end: 240 },
-  PREROUNDS,
-  { label: "Other care", hours: "6–7 AM", start: 360, end: 420 },
-  ROUNDS,
-  { label: "Afternoon", hours: "Noon–7 PM", start: 720, end: 1140 },
-  { label: "Evening", hours: "7 PM–midnight", start: 1140, end: END },
-] as const;
+const PREROUNDS = { start: 240, end: 360 };
+const ROUNDS = { start: 420, end: 720 };
 export const NURSING_COVERAGE = [
   { start: 0, end: 420, label: "Night shift", hours: "7 PM–7 AM", nurses: ["nurse-night", "nurse-night-east"] },
   { start: 420, end: 1140, label: "Day shift", hours: "7 AM–7 PM", nurses: ["nurse", "nurse-east"] },

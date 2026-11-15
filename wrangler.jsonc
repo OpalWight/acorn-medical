@@ -1,0 +1,9 @@
+{
+  "name": "acorn",
+  "compatibility_date": "2026-11-15",
+  "workers_dev": true,
+  "preview_urls": false,
+  "assets": {
+    "directory": "./wardround/out/acorn"
+  }
+}

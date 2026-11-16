@@ -44,9 +44,8 @@ export function TaskForm({ now, preferredStart, preferredDuration, role, busy, o
     <h3 id="task-form-title">Add a task or visit</h3>
     <Field>
       <FieldLabel htmlFor="new-task-name">Task name</FieldLabel>
-      <Input id="new-task-name" name="name" required maxLength={80} autoFocus data-tour="name" />
+      <Input id="new-task-name" name="name" required maxLength={80} autoFocus />
     </Field>
-    <div className="task-timing-fields" data-tour="task-settings">
     <div className="task-form-fields">
       <Field>
         <FieldLabel htmlFor="new-task-kind">Task type</FieldLabel>
@@ -96,14 +95,13 @@ export function TaskForm({ now, preferredStart, preferredDuration, role, busy, o
         </Field>
       </>}
     </div>
-    </div>
     <Field>
       <FieldLabel htmlFor="new-task-notes">Instructions <small>(optional)</small></FieldLabel>
       <Textarea id="new-task-notes" name="notes" rows={2} maxLength={500} />
     </Field>
     <div className="task-form-actions">
       <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-      <Button type="submit" disabled={busy || first >= end} data-tour="save">Save draft</Button>
+      <Button type="submit" disabled={busy || first >= end}>Save draft</Button>
     </div>
   </form>;
 }

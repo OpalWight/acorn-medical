@@ -2,7 +2,7 @@
 
 A shared, sleep-aware scheduling demo for a synthetic adult inpatient ward.
 
-The demo starts at 4:55 AM. Use Play or +5 min in the shared demo clock. The physician can restart the synthetic scenario. The shift calendar opens by default. Select an event to review or change its time, or select a room to see all patient tasks. The Agenda shows visit priority and room-to-room walking estimates. Use the provider picker to switch between the physician and nursing views. Select Tutorial to practice in an isolated shift.
+The demo starts at 4:55 AM. Use Play or +5 min in the shared demo clock. The physician can restart the synthetic scenario. The shift calendar opens by default. Select an event to review or change its time, or select a room to see all patient tasks. The Agenda shows visit priority and room-to-room walking estimates. Use the provider picker to switch between the physician and nursing views.
 
 ## Local development
 

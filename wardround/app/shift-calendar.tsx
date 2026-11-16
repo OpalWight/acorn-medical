@@ -16,7 +16,7 @@ export function ShiftClock({ now, playing, busy, toggle, advance, children }: {
   return <div className="calendar-controls" role="group" aria-label="Shift clock">
     <time className="clock-now">{timeLabel(now)}</time>
     <Button variant="outline" size="icon-sm" disabled={disabled} onClick={toggle} aria-label={playbackLabel} title={playbackLabel}>{playing ? <Pause /> : <Play />}</Button>
-    <Button variant="outline" size="sm" disabled={disabled} onClick={advance} data-tour="advance">+5 min</Button>
+    <Button variant="outline" size="sm" disabled={disabled} onClick={advance}>+5 min</Button>
     {children}
   </div>;
 }
@@ -99,8 +99,8 @@ export function ShiftCalendar({ board, busy, onSelect, onAdd }: {
     <div ref={viewport} className="calendar-scroll" role="region" tabIndex={0} aria-label="Midnight to midnight time grid">
       <div className="calendar-grid" style={{ gridTemplateColumns: `76px repeat(${board.patients.length}, minmax(142px, 1fr))`, gridTemplateRows: `var(--calendar-header) calc(${TICKS.length} * var(--interval))` }}>
         <div className="calendar-corner">Time</div>
-        {board.patients.map((patient, index) => <div className="calendar-room" key={patient.id}>
-          <button className="room-details" onClick={() => onSelect(patient.id)} data-tour={index === 0 ? "calendar-headings" : `room-${patient.id}`}>
+        {board.patients.map((patient) => <div className="calendar-room" key={patient.id}>
+          <button className="room-details" onClick={() => onSelect(patient.id)}>
             <strong>{patient.name}</strong>
             <span className="room-label">Room {patient.room}</span>
             <small>{patient.signal.stage}</small>
@@ -135,7 +135,7 @@ export function ShiftCalendar({ board, busy, onSelect, onAdd }: {
             const description = [task.label, patient.name, timeLabel(time), status, moveLabel === status ? undefined : moveLabel].filter(Boolean).join(", ");
             const appearance = completed ? "event-done" : draft ? "event-draft" : "";
             const visibleMinutes = Math.min(displayMinutes, END - time);
-            return <button className={`calendar-event kind-${task.kind} ${appearance}`} key={task.id} onClick={() => onSelect(patient.id, task.id)} title={description} data-tour={task.id}
+            return <button className={`calendar-event kind-${task.kind} ${appearance}`} key={task.id} onClick={() => onSelect(patient.id, task.id)} title={description}
               style={{ top: offset(time), height: offset(visibleMinutes), left: lane / lanes * 100 + "%", width: 100 / lanes + "%" }}
               aria-label={description}>
               <span className="event-meta"><time>{timeLabel(time)}</time>

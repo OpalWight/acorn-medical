@@ -131,7 +131,6 @@ tr:hover td { background: #f3faf7; }
 .task-section-heading { margin: 12px 0 8px; }
 .task-section-heading h3, .task-form h3 { font-size: 15px; font-weight: 650; }
 .task-form { display: grid; gap: 14px; }
-.task-timing-fields { display: grid; gap: 14px; }
 .task-form-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .task-form [data-slot="field"] { gap: 6px; }
 .task-form label { font-size: 12px; }
@@ -267,102 +266,4 @@ main.calendar-main { display: flex; flex-direction: column; max-width: none; pad
 
 @media (max-width: 480px) {
   .patient-roster .roster-walk { display: none; }
-}
-
-.view-tabs .tutorial-launch { margin-left: auto; color: var(--accent); }
-.app-shell.practice-ward, .patient-dialog.practice-dialog { height: max(120px, calc(100dvh - var(--tutorial-space, 152px))); }
-.practice-dialog[data-slot="sheet-content"] { animation: none; transition: none; }
-
-@font-face {
-  font-family: Workbench;
-  src: url("/tutorial-workbench.ttf") format("truetype");
-  font-display: swap;
-}
-
-.tutorial-mask, .tutorial-spotlight { position: fixed; z-index: 60; pointer-events: none; }
-.tutorial-mask { inset: 0; background: #24242bb8; }
-.tutorial-spotlight { box-shadow: 0 0 0 3px #ffdb83, 0 0 0 5px #30263c, 0 0 0 200vmax #24242bb8; }
-.tutorial-panel { position: fixed; z-index: 61; inset: auto 0 0; padding: 0 20px max(20px, env(safe-area-inset-bottom)); pointer-events: none; }
-.tutorial-dialogue {
-  --game-ink: #272039;
-  --game-paper: #fff5d9;
-  --game-edge: #e5c786;
-  --guide-color: #a62e40;
-  --portrait-size: clamp(64px, 18dvh, 136px);
-  max-width: 760px;
-  margin: auto;
-  font: 18px/1.4 Workbench, ui-monospace, monospace;
-}
-.tutorial-dialogue[data-guide="simon"] { --guide-color: #274d9a; }
-.tutorial-dialogue[data-guide="theodore"] { --guide-color: #23693f; }
-.tutorial-sprite {
-  display: block;
-  position: relative;
-  z-index: 1;
-  width: var(--portrait-size);
-  aspect-ratio: 1;
-  margin: 0 0 -3px 16px;
-  background: url("/tutorial-chipmunks.webp") var(--sprite-x) var(--sprite-y) / 400% 300% no-repeat;
-  image-rendering: pixelated;
-  filter: drop-shadow(3px 3px 0 #21192c);
-}
-.tutorial-bubble {
-  position: relative;
-  display: grid;
-  gap: 12px;
-  padding: 16px 24px 14px;
-  border: 4px solid var(--game-ink);
-  box-shadow: inset 0 0 0 3px var(--game-edge), 0 5px 0 var(--game-ink), 5px 5px 0 #17121db0;
-  background: var(--game-paper);
-  color: var(--game-ink);
-  pointer-events: auto;
-}
-.tutorial-bubble::before, .tutorial-bubble::after {
-  content: "";
-  position: absolute;
-  left: calc(16px + var(--portrait-size) * .78);
-  bottom: 100%;
-  width: 36px;
-  height: 19px;
-  background: var(--game-ink);
-  clip-path: polygon(0 0, 8px 0, 8px 4px, 15px 4px, 15px 8px, 22px 8px, 22px 12px, 29px 12px, 29px 16px, 100% 16px, 100% 100%, 8px 100%, 8px 12px, 4px 12px, 4px 5px, 0 5px);
-}
-.tutorial-bubble::after { left: calc(19px + var(--portrait-size) * .78); bottom: calc(100% - 5px); background: var(--game-paper); }
-.tutorial-words strong {
-  display: inline-block;
-  margin-bottom: 7px;
-  padding: 0 8px;
-  background: var(--guide-color);
-  color: #fff9ed;
-  text-transform: uppercase;
-  font-weight: 400;
-  font-size: 16px;
-  box-shadow: 2px 2px 0 var(--game-ink);
-}
-.tutorial-words p { font: 16px/1.5 ui-monospace, monospace; }
-.tutorial-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 14px; }
-.tutorial-actions button { border-radius: 0; min-height: 40px; padding: 4px 10px; white-space: nowrap; font-size: 16px; }
-.tutorial-actions button:focus-visible { outline: 2px solid var(--guide-color); outline-offset: 4px; }
-.tutorial-skip { border: 0; color: #53445b; background: transparent; text-decoration: underline; text-underline-offset: 4px; }
-.tutorial-continue {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  border: 2px solid var(--game-ink);
-  background: var(--game-ink);
-  color: var(--game-paper);
-  box-shadow: 3px 3px 0 var(--guide-color);
-}
-.tutorial-continue::after { content: ""; width: 10px; height: 12px; background: currentColor; clip-path: polygon(0 0, 33% 0, 33% 17%, 66% 17%, 66% 33%, 100% 33%, 100% 66%, 66% 66%, 66% 83%, 33% 83%, 33% 100%, 0 100%); }
-.tutorial-continue kbd { padding: 0 4px; border: 1px solid currentColor; font: 10px/1.5 ui-monospace, monospace; }
-.tutorial-continue:hover:not(:disabled) { background: var(--guide-color); }
-.tutorial-continue:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--guide-color); }
-@media (max-width: 640px) {
-  .tutorial-panel { padding-inline: 12px 16px; }
-  .tutorial-dialogue { --portrait-size: clamp(64px, 13dvh, 104px); }
-  .tutorial-bubble { padding: 12px 14px; gap: 8px; }
-  .tutorial-words p { font-size: 14px; }
-  .tutorial-actions { gap: 4px 8px; }
-  .tutorial-actions button { min-height: 36px; }
-  .tutorial-continue kbd { display: none; }
 }

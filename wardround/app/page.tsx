@@ -6,7 +6,7 @@ import {
   Footprints, LockKeyhole, PanelLeft, Plus, X,
 } from "lucide-react";
 import {
-  applyAction, canChange, END, initialState, isStudentRound, PRIORITIES, PROVIDERS, snapshot, STAFF, studentRoute, TASK_KINDS, timeInput, timeLabel, walking,
+  applyAction, canChange, END, initialState, PRIORITIES, PROVIDERS, snapshot, STAFF, timeInput, timeLabel, walking,
   type Action, type Provider, type Role, type Snapshot, type Urgency,
 } from "../lib/ward";
 import { eventTime } from "../lib/calendar";
@@ -21,7 +21,7 @@ import { CalendarControls, ShiftCalendar, ShiftClock } from "./shift-calendar";
 import { TaskForm } from "./task-form";
 import { Tutorial, tutorialSteps } from "./tutorial";
 
-type View = "calendar" | "patients" | "agenda" | "rounds";
+type View = "calendar" | "patients" | "agenda";
 type Patient = Snapshot["patients"][number];
 type Task = Snapshot["tasks"][number];
 type Command = Omit<Action, "version" | "provider">;
@@ -31,7 +31,6 @@ const NAV = [
   { id: "calendar", text: "Calendar" },
   { id: "patients", text: "Patients" },
   { id: "agenda", text: "Agenda" },
-  { id: "rounds", text: "Student rounds" },
 ] as const;
 
 function Priority({ value }: { value: Urgency }) {
@@ -85,55 +84,6 @@ function formatWindow(task: Task) {
   return task.earliest === task.latest ? timeLabel(task.earliest) : `${shortTime(task.earliest)}–${timeLabel(task.latest)}`;
 }
 
-function RoundsCard({ board, onSelect, onAction, role, busy }: {
-  board: Snapshot; onSelect: (id: string, taskId?: string) => void;
-  onAction: (command: Command) => Promise<boolean>; role: Role; busy: boolean;
-}) {
-  const route = studentRoute(board);
-  const [editing, setEditing] = useState(false);
-  const [deadline, setDeadline] = useState("");
-  const remaining = board.deadline - route.finish;
-  const total = board.tasks.filter(isStudentRound).length;
-  const saveDeadline = async (event: FormEvent) => {
-    event.preventDefault();
-    if (await onAction({ type: "deadline", time: minutes(deadline) })) setEditing(false);
-  };
-  return <Card title="Assigned route" note={`${total - route.visits.length} of ${total} visits completed`} className="rounds-card">
-    <div data-tour="route">
-    <div className="round-stats">
-      <div><span>Finish by</span><strong>{timeLabel(board.deadline)}</strong></div>
-      <div><span>Projected finish</span><strong className={route.late ? "late-text" : ""}>{timeLabel(route.finish)}</strong></div>
-    </div>
-    <div className={`round-status ${route.late ? "late" : ""}`}>{route.late ? <CircleAlert size={15} /> : <Check size={15} />}
-      {remaining < 0 ? `${-remaining} min past deadline` : route.late ? "A visit falls outside its allowed window" : `${remaining} min before the cutoff`}</div>
-    <div className="route-list">
-      {(["preround", "round"] as const).map((kind) => {
-        const visits = route.visits.filter((visit) => visit.kind === kind);
-        return <section key={kind} className="route-phase">
-          <h3>{TASK_KINDS[kind]}</h3>
-          {visits.length === 0 && <p className="empty">All assigned visits are complete.</p>}
-          {visits.map((visit, index) => <button key={visit.task} className="route-visit" onClick={() => onSelect(visit.patient.id, visit.task)}>
-            <span className="rank">{index + 1}</span>
-            <div><strong>{visit.patient.name}</strong><small>Room {visit.patient.room} · {visit.walk} min walk{visit.proposed ? " · Proposed" : ""}</small></div>
-            <div className={visit.conflict ? "late-text" : ""}><strong>{shortTime(visit.start)}–{timeLabel(visit.finish)}</strong><small>{visit.conflict ? "Outside allowed window" : "Estimated visit"}</small></div>
-            <ChevronRight size={16} />
-          </button>)}
-        </section>;
-      })}
-    </div>
-    </div>
-    <div className="round-bottom">
-      <span><Footprints size={15} /> {route.walkingMinutes} min walking</span>
-      {role !== "student" && !editing && <button className="text-button" onClick={() => { setDeadline(timeInput(board.deadline)); setEditing(true); }}>Edit deadline</button>}
-    </div>
-    {editing && role !== "student" && <form className="inline-form" onSubmit={saveDeadline}>
-      <label>Rounds finish by <input required type="time" value={deadline} onChange={(event) => setDeadline(event.target.value)} /></label>
-      <button className="button solid" disabled={busy}>Save deadline</button>
-      <button className="button" type="button" onClick={() => setEditing(false)}>Cancel</button>
-    </form>}
-  </Card>;
-}
-
 function PatientDialog({ patient, board, role, taskId, startAdding, returnFocus, onShowAll, onClose, onAction, onAdd, practice, busy, actionError }: {
   patient: Patient; board: Snapshot; role: Role; taskId?: string; startAdding?: TaskSlot; returnFocus: HTMLElement | null; onShowAll: () => void; onClose: () => void;
   onAction: (command: Command) => Promise<boolean>; onAdd: () => void; practice: boolean; busy: boolean; actionError: string;
@@ -167,11 +117,11 @@ function PatientDialog({ patient, board, role, taskId, startAdding, returnFocus,
           <Button type="button" variant="ghost" size="icon" onClick={onClose} aria-label="Close patient details" data-tour="close"><X /></Button>
         </header>
       <div className="drawer-controls">
-        {role === "student" ? <Priority value={patient.urgency} /> : <label>Patient urgency
+        <label>Patient urgency
           <select disabled={busy} value={patient.urgency} onChange={(event) => void onAction({ type: "priority", id: patient.id, urgency: event.target.value as Urgency })}>
             {Object.entries(PRIORITIES).map(([value, title]) => <option key={value} value={value}>{title}</option>)}
           </select>
-        </label>}
+        </label>
         <button className="button" disabled={busy} onClick={() => void onAction({ type: "visit", room: patient.room })}><Footprints size={15} />{board.lastRoom === patient.room ? "Last room recorded" : "Record last room"}</button>
       </div>
       <section className="signal-detail"><div><h3>Sleep status</h3><small>Synthetic reading · {timeLabel(patient.signal.observedAt)}</small></div><Sleep patient={patient} />
@@ -190,11 +140,11 @@ function PatientDialog({ patient, board, role, taskId, startAdding, returnFocus,
           onShowAll();
           setAdding(true);
           onAdd();
-        }}><Plus />{role === "student" ? "Propose task" : "Add task"}</Button>
+        }}><Plus />Add task</Button>
       </div>}
       {!adding && !tasks.length && <p className="empty">No tasks for this patient.</p>}
       {!adding && tasks.map((task) => {
-        const changeable = canChange(role, task) && task.latest >= board.now;
+        const changeable = canChange(task) && task.latest >= board.now;
         const suggested = task.recommendation.time;
         const fixed = task.earliest === task.latest;
         const complete = task.completedAt !== undefined;
@@ -207,20 +157,18 @@ function PatientDialog({ patient, board, role, taskId, startAdding, returnFocus,
             <div data-tour="task-time"><small>{complete ? "Completed" : fixed ? task.approval ? "Fixed time" : "Fixed time · draft" : task.approval ? "Scheduled" : "Draft time"}</small><strong>{timeLabel(eventTime(task))}{task.approval?.locked && <LockKeyhole size={13} aria-label="Locked" />}</strong></div>
             <div><small>Location</small><strong>Room {patient.room}</strong></div>
             {!complete && !fixed && task.approval && task.revision && suggested !== null && <div><small>Live suggestion</small><strong>{timeLabel(suggested)}</strong></div>}
-            {!complete && task.proposedAt !== undefined && <div><small>Student proposal</small><strong>{timeLabel(task.proposedAt)}</strong></div>}
           </div>
           {!complete && !fixed && (task.revision || task.latest < board.now || task.recommendation.readyNow && !task.approval?.locked) &&
             <p className="task-reason">{task.recommendation.reason}</p>}
           {complete || <div className="task-actions">
-            {task.revision && changeable && suggested !== null && <button className="button solid" data-tour="approve" disabled={busy} onClick={() => void onAction({ type: "approve", id: task.id, time: suggested })}>{role === "student" ? "Propose suggestion" : "Approve suggestion"}</button>}
-            {changeable && role !== "student" && task.proposedAt !== undefined && task.proposedAt >= board.now && <button className="button solid" disabled={busy} onClick={() => void onAction({ type: "acceptProposal", id: task.id })}>Approve proposal</button>}
-            {changeable && <button className="button" onClick={() => { setEditing(task.id); setEditTime(timeInput(Math.max(board.now, task.proposedAt ?? task.approval?.time ?? suggested ?? task.earliest))); }}>Edit time</button>}
+            {task.revision && changeable && suggested !== null && <button className="button solid" data-tour="approve" disabled={busy} onClick={() => void onAction({ type: "approve", id: task.id, time: suggested })}>Approve suggestion</button>}
+            {changeable && <button className="button" onClick={() => { setEditing(task.id); setEditTime(timeInput(Math.max(board.now, task.approval?.time ?? suggested ?? task.earliest))); }}>Edit time</button>}
             {role === "physician" && task.approval && !fixed && <button className="button" disabled={busy} onClick={() => void onAction({ type: "lock", id: task.id })}>{task.approval.locked ? "Unlock task" : "Lock task"}</button>}
             {(role === "physician" || board.provider === task.assignedTo) && board.now >= task.earliest && <button className="button" disabled={busy} onClick={() => void onAction({ type: "complete", id: task.id })}><Check size={14} />Mark complete</button>}
           </div>}
           {editing === task.id && changeable && <form className="inline-form" onSubmit={(event) => void saveTime(event, task)}>
             <label>New time <input required type="time" min={timeInput(Math.max(board.now, task.earliest))} max={timeInput(task.latest)} value={editTime} onChange={(event) => setEditTime(event.target.value)} /></label>
-            <button className="button solid" disabled={busy}>{role === "student" ? "Propose time" : "Save time"}</button>
+            <button className="button solid" disabled={busy}>Save time</button>
             <button className="button" type="button" onClick={() => setEditing(null)}>Cancel</button>
           </form>}
         </article>;
@@ -359,7 +307,6 @@ function Ward({ onStartTutorial, onExitTutorial }: {
     setFilter("all");
     setActionError("");
     setNotice("");
-    advanceTutorial(next);
   }
 
   const selected = board?.patients.find((patient) => patient.id === selectedId);
@@ -389,12 +336,12 @@ function Ward({ onStartTutorial, onExitTutorial }: {
         </button>
       </div>
       <nav className="view-tabs" aria-label="Shift views">
-        {NAV.filter(({ id }) => id !== "rounds" || board?.tasks.some(isStudentRound)).map(({ id, text }) => <button key={id} data-tour={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => { setView(id); setActionError(""); advanceTutorial(id); }}>{text}</button>)}
+        {NAV.map(({ id, text }) => <button key={id} data-tour={id} className={view === id ? "active" : ""} aria-current={view === id ? "page" : undefined} onClick={() => { setView(id); setActionError(""); advanceTutorial(id); }}>{text}</button>)}
         {onStartTutorial && <button className="tutorial-launch" type="button" onClick={(event) => onStartTutorial(event.currentTarget)}>Tutorial</button>}
       </nav>
       <div className="role-picker">
-        <NativeSelect aria-label="Provider view" data-tour="provider" size="sm" value={provider} disabled={busy} onChange={(event) => switchProvider(event.target.value as Provider)}>
-          {Object.entries(PROVIDERS).map(([value, person]) => <NativeSelectOption key={value} value={value} disabled={practice && value !== "student"}>{person.name}{person.role === "student" ? " · Student" : ""}</NativeSelectOption>)}
+        <NativeSelect aria-label="Provider view" size="sm" value={provider} disabled={busy || practice} onChange={(event) => switchProvider(event.target.value as Provider)}>
+          {Object.entries(PROVIDERS).map(([value, person]) => <NativeSelectOption key={value} value={value}>{person.name}</NativeSelectOption>)}
         </NativeSelect>
       </div>
     </header>
@@ -409,7 +356,7 @@ function Ward({ onStartTutorial, onExitTutorial }: {
         </Button>
       </aside>
       <main className={view === "calendar" ? "calendar-main" : undefined}>
-      {(view === "agenda" || view === "rounds") && <div className="page-heading"><h1>{view === "agenda" ? "Ward agenda" : "Student rounds"}</h1></div>}
+      {view === "agenda" && <div className="page-heading"><h1>Ward agenda</h1></div>}
       {board && !connected && <p className="connection-status" role="status">{offline ? "Could not read the saved demo. Retrying…" : "Reconnecting to the schedule…"}</p>}
       {actionError && !selected && <p className="global-error" role="alert"><CircleAlert size={18} />{actionError}</p>}
       {!board && <div className="card loading" role="status">{connected ? "Loading the ward…" : offline ? "Could not read the saved demo. Retrying…" : "Could not reach the ward. Retrying…"}</div>}
@@ -423,7 +370,7 @@ function Ward({ onStartTutorial, onExitTutorial }: {
                 <tbody>{patients.filter((patient) => filter === "all" || patient.urgency !== "routine").map((patient) => {
                   const tasks = board.tasks.filter((task) => task.patient === patient.id && task.completedAt === undefined && task.latest >= board.now);
                   const next = tasks.sort((a, b) => (a.approval?.time ?? a.recommendation.time ?? a.baseline) - (b.approval?.time ?? b.recommendation.time ?? b.baseline))[0];
-                  const pending = tasks.filter((task) => (task.approval && task.revision) || task.proposedAt !== undefined).length;
+                  const pending = tasks.filter((task) => task.approval && task.revision).length;
                   return <tr key={patient.id}>
                     <td><button className="patient-name" onClick={() => pickPatient(patient.id)}><span><strong>{patient.name}</strong><small>Room {patient.room}</small></span></button></td>
                     <td><Priority value={patient.urgency} /></td>
@@ -446,7 +393,6 @@ function Ward({ onStartTutorial, onExitTutorial }: {
             </aside>
           </div>
         </>}
-        {board && view === "rounds" && <div className="main-card"><RoundsCard board={board} role={role} busy={busy} onSelect={pickPatient} onAction={act} /></div>}
       </main>
     </div>
     {selected && board && <PatientDialog key={selected.id} patient={selected} board={board} role={role} taskId={taskId} startAdding={startAdding} returnFocus={patientTrigger.current} busy={busy} actionError={actionError} practice={practice} onShowAll={() => setTaskId(undefined)} onAdd={() => advanceTutorial("add")} onClose={() => { setSelectedId(null); setActionError(""); advanceTutorial("close"); }} onAction={act} />}

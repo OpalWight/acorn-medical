@@ -35,9 +35,6 @@ export const tutorialSteps: readonly Step[] = [
   { speaker: 2, pose: 2, target: "patients", action: "patients", text: "Open Patients for a quick look at everyone’s sleep stage, urgency, and walking time." },
   { speaker: 2, pose: 1, target: "agenda", action: "agenda", text: "Open Agenda to see each patient’s next care task and the suggested visit order." },
   { speaker: 2, pose: 2, target: "priority", action: "priority", text: "Click Priority to focus on patients with elevated urgency or rapid decline." },
-  { speaker: 2, pose: 0, target: "provider", action: "student", text: "Choose Jordan Ellis · Student. Students can propose a task or time for a physician or nurse to approve." },
-  { speaker: 2, pose: 1, target: "rounds", action: "rounds", text: "Open Student rounds to see the order of your assigned visits." },
-  { speaker: 2, pose: 2, target: "route", text: "Compare the projected finish with your deadline. Each stop shows its room, estimated visit time, and walking time." },
   { speaker: 0, pose: 3, button: "Finish tutorial", text: "Nice work! Finish to return to your original shift. You can replay this walkthrough from Tutorial." },
 ];
 
@@ -63,11 +60,16 @@ function spotlightBounds(element: HTMLElement) {
   return { left, top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
 }
 
+function spotlightPosition({ left, top, width, height }: ReturnType<typeof spotlightBounds>) {
+  return { left: `${left}px`, top: `${top}px`, width: `${width}px`, height: `${height}px` };
+}
+
 export function Tutorial({ index, exit, advance }: { index: number; exit: () => void; advance: () => void }) {
   const step = tutorialSteps[index];
   const panel = useRef<HTMLElement>(null);
   const mask = useRef<HTMLDivElement>(null);
   const spotlight = useRef<HTMLDivElement>(null);
+  const previousPosition = useRef<ReturnType<typeof spotlightPosition>>(null);
   const [nameReady, setNameReady] = useState(false);
   const exitRef = useRef(exit);
   useLayoutEffect(() => { exitRef.current = exit; }, [exit]);
@@ -81,21 +83,41 @@ export function Tutorial({ index, exit, advance }: { index: number; exit: () => 
     let targetControl: HTMLElement | null = null;
     let frame = 0;
     let locateFrame = 0;
+    let zoom: Animation | undefined;
 
-    function measure() {
+    function measure(transition = false) {
       document.body.style.setProperty("--tutorial-space", `${dialogue.offsetHeight}px`);
+      if (step.target && !target) return;
       const bounds = target && spotlightBounds(target);
-      const visible = bounds && bounds.width > 0 && bounds.height > 0;
-      dimmer.hidden = Boolean(visible);
+      const visible = Boolean(bounds && bounds.width > 0 && bounds.height > 0);
+      dimmer.hidden = visible;
       outline.hidden = !visible;
-      if (visible) Object.assign(outline.style, {
-        left: `${bounds.left}px`, top: `${bounds.top}px`, width: `${bounds.width}px`, height: `${bounds.height}px`,
-      });
+      if (!visible || !bounds) {
+        previousPosition.current = null;
+        return;
+      }
+
+      const previous = previousPosition.current;
+      const next = spotlightPosition(bounds);
+      Object.assign(outline.style, next);
+      previousPosition.current = next;
+
+      if (transition && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const full = spotlightPosition({ left: -6, top: -6, width: window.innerWidth + 12, height: window.innerHeight + 12 });
+        zoom = outline.animate(previous ? [previous, { ...full, offset: 0.45 }, next] : [full, next], {
+          duration: previous ? 360 : 200,
+          easing: "ease-in-out",
+        });
+      }
     }
 
     function queueMeasure() {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(measure);
+      frame = requestAnimationFrame(() => measure());
+    }
+
+    function continueButton() {
+      return dialogue.querySelector<HTMLButtonElement>(".tutorial-continue:not(:disabled)");
     }
 
     function blockOtherControls(event: Event) {
@@ -103,6 +125,7 @@ export function Tutorial({ index, exit, advance }: { index: number; exit: () => 
       if (element instanceof Node && (dialogue.contains(element) || targetControl?.contains(element))) return;
       event.preventDefault();
       event.stopPropagation();
+      if (!interactive && event.type === "click" && element instanceof Node && target?.contains(element)) continueButton()?.click();
     }
 
     function keys(event: KeyboardEvent) {
@@ -110,6 +133,16 @@ export function Tutorial({ index, exit, advance }: { index: number; exit: () => 
         event.preventDefault();
         event.stopPropagation();
         exitRef.current();
+        return;
+      }
+      if (event.code === "Space" && !event.altKey && !event.ctrlKey && !event.metaKey &&
+          !(step.input && document.activeElement === targetControl) && !document.activeElement?.matches(".tutorial-skip")) {
+        const control = step.action ? targetControl : continueButton();
+        if (!control || control.matches(":disabled")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!event.repeat) control.click();
+        return;
       }
       if (event.key !== "Tab") return;
       const controls = [...dialogue.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
@@ -140,9 +173,8 @@ export function Tutorial({ index, exit, advance }: { index: number; exit: () => 
         target.scrollIntoView({ block: "center", inline: "center" });
         resize.observe(target);
       }
-      const nextButton = dialogue.querySelector<HTMLElement>(".tutorial-continue");
-      (targetControl ?? nextButton)?.focus({ preventScroll: true });
-      measure();
+      (targetControl ?? continueButton())?.focus({ preventScroll: true });
+      measure(true);
       if (step.input) {
         readName();
         targetControl?.addEventListener("input", readName);
@@ -159,6 +191,7 @@ export function Tutorial({ index, exit, advance }: { index: number; exit: () => 
     return () => {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(locateFrame);
+      zoom?.cancel();
       resize.disconnect();
       targetControl?.removeEventListener("input", readName);
       window.removeEventListener("resize", queueMeasure);
@@ -187,7 +220,9 @@ export function Tutorial({ index, exit, advance }: { index: number; exit: () => 
           <div className="tutorial-actions">
             <button className="tutorial-skip" type="button" onClick={exit}>Skip tutorial</button>
             {!step.action && <button className="tutorial-continue" type="button" disabled={step.input && !nameReady}
-              onClick={done ? exit : advance}>{step.button ?? "Continue"}</button>}
+              aria-keyshortcuts={step.input ? undefined : "Space"} onClick={done ? exit : advance}>
+              {step.button ?? "Continue"}{!step.input && <kbd aria-hidden="true">Space</kbd>}
+            </button>}
           </div>
         </div>
       </div>

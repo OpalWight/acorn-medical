@@ -122,7 +122,7 @@ export function ShiftCalendar({ board, busy, onSelect, onAdd }: {
             const fixed = task.earliest === task.latest;
             const completed = task.completedAt !== undefined;
             const draft = !task.approval && !completed;
-            const hasRevision = Boolean(task.approval && task.revision || task.proposedAt !== undefined);
+            const hasRevision = task.approval && task.revision;
             const status = completed ? "Completed" : draft ? fixed ? "Fixed draft" : "Draft" : fixed ? "Fixed" : hasRevision ? "Revision available" : "Approved";
             const urgent = !completed && (task.urgency === "critical" || task.kind === "assessment" && task.priority === "critical" && task.earliest <= board.now);
             const sleepDelay = task.revision && task.recommendation.sleepDelay;

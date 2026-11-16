@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { syntheticReading } from "../lib/synthetic-sleep.ts";
-import { applyAction, END, initialState, NURSING_COVERAGE, snapshot, START, studentRoute, walking, type Action, type Provider } from "../lib/ward.ts";
+import { applyAction, END, initialState, NURSING_COVERAGE, snapshot, START, type Action, type Provider, type WardState } from "../lib/ward.ts";
 
 const wallTime = 100_000;
 const morning = () => {
@@ -36,7 +36,7 @@ test("fixed medication stays fixed while flexible tasks can move earlier or late
   assert.match(task("cmp", drawing).recommendation.reason, /recheck sleep status/);
   drawing.clock.minute = 360;
   assert.equal(view(drawing).patients.find((patient) => patient.id === "mr")!.signal.stage, "Deep sleep");
-  assert.throws(() => change({ type: "edit", provider: "physician", id: "med", time: 355 }), /cannot change/);
+  assert.throws(() => change({ type: "edit", provider: "physician", id: "med", time: 355 }), /cannot be changed/);
   assert.throws(() => change({ type: "edit", provider: "nurse", id: "cmp", time: 410 }), /authorized window/);
   drawing.clock.minute = 365;
   assert.equal(task("cmp", change({ type: "approve", provider: "nurse", id: "cmp", time: 370 }, drawing)).approval?.time, 370);
@@ -59,7 +59,6 @@ test("staff-assigned rapid decline takes priority over sleep and walking", () =>
   assert.equal(first.patient.signal.stage, "Deep sleep");
   assert.equal(first.task, "Assess now");
   assert.equal(task("cmp", state).recommendation.time, 360);
-  assert.throws(() => change({ type: "priority", provider: "student", id: "mr", urgency: "critical" }));
 });
 
 test("a routine light-sleep visit takes precedence over an equally due deep-sleep visit", () => {
@@ -99,52 +98,34 @@ test("provider rosters scope patients, events, actions, locations, and activity"
   assert.deepEqual(list(), ["th", "mr", "np", "er", "jw"]);
   assert.deepEqual(list("nurse"), ["th", "np"]);
   assert.deepEqual(list("nurse-east"), ["mr", "er", "jw"]);
-  assert.deepEqual(list("student"), ["mr", "er", "jw"]);
   assert.equal(task("resp").assignedTo, "physician");
   assert.equal(task("cmp").assignedTo, "nurse-night");
   assert.equal(task("med").assignedTo, "nurse-night-east");
-  assert.equal(task("round-e").assignedTo, "student");
   const state = change({ type: "visit", provider: "nurse", room: "407" });
   assert.equal(view(state, "nurse").lastRoom, "407");
   assert.equal(view(state, "nurse-east").lastRoom, "station");
   assert.equal(view(state, "nurse-east").activities.length, 0);
   assert.ok(view(state, "nurse").tasks.every((item) => ["th", "np"].includes(item.patient)));
   assert.throws(() => change({ type: "edit", provider: "nurse-east", id: "cmp", time: 365 }));
-  assert.throws(() => change({ type: "visit", provider: "student", room: "407" }));
 });
 
-test("medical students can propose their own time and physicians can lock it", () => {
-  let state = change({ type: "edit", provider: "student", id: "round-m", time: 428 });
-  assert.equal(task("round-m", state).proposedAt, 428);
-  assert.equal(task("round-m", state).approval, undefined);
-  state = change({ type: "acceptProposal", provider: "physician", id: "round-m" }, state);
-  state = change({ type: "lock", provider: "physician", id: "round-m" }, state);
-  assert.equal(task("round-m", state).approval?.time, 428);
-  assert.throws(() => change({ type: "edit", provider: "nurse", id: "round-m", time: 435 }, state), /cannot change/);
-});
-
-test("a whole student round accounts for walking, visit duration, and cutoff", () => {
-  const original = studentRoute(view());
-  assert.equal(original.finish, 472);
-  assert.equal(original.visits.filter((visit) => visit.kind === "preround").length, 3);
-  assert.ok(original.visits.every((visit) => visit.kind === "preround" ? visit.finish <= 360 : visit.start >= 420));
-  assert.equal(original.late, false);
-  let state = change({ type: "deadline", provider: "nurse", time: 449 });
-  state = change({ type: "visit", provider: "student", room: "403" }, state);
-  const route = studentRoute(view(state));
-  assert.equal(route.visits[0].walk, 0);
-  assert.equal(route.walkingMinutes, original.walkingMinutes - walking("station", "403"));
-  assert.equal(route.late, true);
-  assert.throws(() => change({ type: "deadline", provider: "student", time: 470 }, state));
+test("a physician can reschedule and lock an approved flexible task", () => {
+  let state = change({ type: "edit", provider: "physician", id: "flex", time: 375 });
+  state = change({ type: "lock", provider: "physician", id: "flex" }, state);
+  assert.equal(task("flex", state).approval?.time, 375);
+  assert.throws(() => change({ type: "edit", provider: "nurse-east", id: "flex", time: 380 }, state), /cannot be changed/);
 });
 
 test("batch approval preserves the already approved time of a live revision", () => {
   const drawing = initialState();
   drawing.clock.minute = 365;
-  const state = change({ type: "approveShift", provider: "physician" }, drawing);
+  const draft = { label: "Follow-up visit", kind: "visit", role: "physician", urgency: "routine",
+    earliest: 420, latest: 440, baseline: 420, duration: 10, note: "" } as const;
+  const drafted = change({ type: "addTask", provider: "physician", id: "np", draft }, drawing);
+  const state = change({ type: "approveShift", provider: "physician" }, drafted);
   assert.equal(task("cmp", state).approval?.time, 365);
   assert.equal(task("cmp", state).recommendation.time, 370);
-  assert.equal(task("round-m", state).approval?.time, 420);
+  assert.equal(task(drafted.addedTasks![0].id, state).approval?.time, 420);
   assert.throws(() => change({ type: "approveShift", provider: "nurse" }));
 });
 
@@ -181,17 +162,18 @@ test("task creation respects shift periods and fixed approved medication is lock
   assert.deepEqual(task(id, approved).approval, { time: 360, by: "physician", locked: true });
 });
 
-test("students propose their own routine work and assignment can add a patient to their roster", () => {
+test("legacy student tasks and proposals stay out of saved staff shifts", () => {
   const draft = { label: "Review intake", kind: "visit", role: "student", urgency: "routine",
     earliest: 405, latest: 440, baseline: 420, duration: 10, note: "" } as const;
-  assert.throws(() => change({ type: "addTask", provider: "student", id: "np", draft }), /assigned patient/);
-  assert.throws(() => change({ type: "addTask", provider: "student", id: "mr", draft: { ...draft, role: "nurse" } }), /routine tasks/);
-  const assigned = change({ type: "addTask", provider: "physician", id: "np", draft });
-  assert.ok(view(assigned, "student").patients.some((patient) => patient.id === "np"));
-  const proposed = change({ type: "addTask", provider: "student", id: "np", draft }, assigned);
-  const id = proposed.addedTasks![1].id;
-  assert.equal(task(id, proposed).proposedAt, 420);
-  assert.equal(task(id, proposed).approval, undefined);
+  const saved = { ...morning(), proposals: { "old-task": 410 }, deadline: 480,
+    addedTasks: [{ ...draft, id: "old-task", patient: "np" }, { ...draft, id: "staff-task", patient: "np", role: "nurse" }],
+  } as unknown as WardState;
+  assert.ok(!view(saved).tasks.some((item) => item.id === "old-task" || Object.hasOwn(item, "proposedAt")));
+  assert.equal(task("staff-task", saved).assignedTo, "nurse");
+  assert.equal(task("cmp", saved).approval?.time, 365);
+  assert.throws(() => change({ type: "advance", provider: "student" as Provider }, saved), /Invalid provider/);
+  assert.throws(() => change({ type: "acceptProposal" as Action["type"], provider: "physician", id: "old-task" }, saved), /Unknown ward action/);
+  assert.throws(() => change({ type: "addTask", provider: "physician", id: "np", draft: draft as unknown as Action["draft"] }, saved), /allowed task type, provider/);
 });
 
 test("the 2 AM overnight examples preserve order windows", () => {
@@ -282,5 +264,5 @@ test("the dawn shortcut pauses the clock at 4:55 AM and keeps saved care", () =>
   state.completed.flex = 370;
   const replay = change({ type: "dawn", provider: "physician" }, state);
   assert.deepEqual(replay, { ...state, clock: { minute: START, playingSince: null } });
-  assert.throws(() => change({ type: "dawn", provider: "student" }, state), /physician/);
+  assert.throws(() => change({ type: "dawn", provider: "nurse" }, state), /physician/);
 });

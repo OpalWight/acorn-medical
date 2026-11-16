@@ -21,7 +21,6 @@ export function TaskForm({ now, preferredStart, preferredDuration, role, busy, o
   const first = Math.max(now, start, preferredStart !== undefined && preferredStart < end ? preferredStart : start);
   const duration = Math.max(1, Math.min(preferredDuration ?? 10, end - first));
   const last = Math.max(first, Math.min(first + 30, end - duration));
-  const roles: Role[] = role === "student" ? ["student"] : ["physician", "nurse", "student"];
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -32,7 +31,7 @@ export function TaskForm({ now, preferredStart, preferredDuration, role, busy, o
       label: String(values.get("name") ?? ""),
       kind,
       role: assignedRole,
-      urgency: role === "student" ? "routine" : values.get("urgency") as Urgency,
+      urgency: values.get("urgency") as Urgency,
       earliest: fixed ? baseline : minuteOfDay(String(values.get("earliest"))),
       latest: fixed ? baseline : minuteOfDay(String(values.get("latest"))),
       baseline,
@@ -42,7 +41,7 @@ export function TaskForm({ now, preferredStart, preferredDuration, role, busy, o
   }
 
   return <form className="task-form" aria-labelledby="task-form-title" onSubmit={submit}>
-    <h3 id="task-form-title">{role === "student" ? "Propose a task" : "Add a task or visit"}</h3>
+    <h3 id="task-form-title">Add a task or visit</h3>
     <Field>
       <FieldLabel htmlFor="new-task-name">Task name</FieldLabel>
       <Input id="new-task-name" name="name" required maxLength={80} autoFocus data-tour="name" />
@@ -59,15 +58,16 @@ export function TaskForm({ now, preferredStart, preferredDuration, role, busy, o
       <Field>
         <FieldLabel htmlFor="new-task-provider">Assigned provider</FieldLabel>
         <NativeSelect id="new-task-provider" name="provider" defaultValue={role}>
-          {roles.map((id) => <NativeSelectOption key={id} value={id}>{id === "nurse" ? "Nurse on duty" : PROVIDERS[id].name}</NativeSelectOption>)}
+          <NativeSelectOption value="physician">{PROVIDERS.physician.name}</NativeSelectOption>
+          <NativeSelectOption value="nurse">Nurse on duty</NativeSelectOption>
         </NativeSelect>
       </Field>
-      {role !== "student" && <Field>
+      <Field>
         <FieldLabel htmlFor="new-task-urgency">Task urgency</FieldLabel>
         <NativeSelect id="new-task-urgency" name="urgency" defaultValue="routine">
           {Object.entries(PRIORITIES).map(([value, label]) => <NativeSelectOption key={value} value={value}>{value === "critical" ? "Urgent" : label}</NativeSelectOption>)}
         </NativeSelect>
-      </Field>}
+      </Field>
       <Field>
         <FieldLabel htmlFor="new-task-timing">Timing</FieldLabel>
         <NativeSelect id="new-task-timing" value={fixed ? "fixed" : "window"} onChange={(event) => setFixed(event.target.value === "fixed")}>
@@ -103,7 +103,7 @@ export function TaskForm({ now, preferredStart, preferredDuration, role, busy, o
     </Field>
     <div className="task-form-actions">
       <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-      <Button type="submit" disabled={busy || first >= end} data-tour="save">{role === "student" ? "Submit proposal" : "Save draft"}</Button>
+      <Button type="submit" disabled={busy || first >= end} data-tour="save">Save draft</Button>
     </div>
   </form>;
 }

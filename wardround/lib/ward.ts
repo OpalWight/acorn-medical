@@ -1,7 +1,6 @@
 export const STAFF = {
   physician: "Physician / resident",
   nurse: "Nurse",
-  student: "Medical student",
 } as const;
 export type Role = keyof typeof STAFF;
 export const PROVIDERS = {
@@ -10,7 +9,6 @@ export const PROVIDERS = {
   "nurse-east": { name: "Samira Davis, RN", role: "nurse" },
   "nurse-night": { name: "Sofia Martinez, RN", role: "nurse" },
   "nurse-night-east": { name: "Jordan Okafor, RN", role: "nurse" },
-  student: { name: "Jordan Ellis", role: "student" },
 } as const satisfies Record<string, { name: string; role: Role }>;
 export type Provider = keyof typeof PROVIDERS;
 export const PRIORITIES = { routine: "Routine", elevated: "Elevated", critical: "Rapid decline" } as const;
@@ -63,10 +61,6 @@ export type Task = {
 };
 export type TaskDraft = Omit<Task, "id" | "patient" | "approved">;
 
-export function isStudentRound(task: Task) {
-  return task.role === "student" && (task.kind === "preround" || task.kind === "round");
-}
-
 export function taskBounds(kind: Task["kind"]) {
   if (kind === "preround") return PREROUNDS;
   if (kind === "round") return ROUNDS;
@@ -88,12 +82,6 @@ export const TASKS: Task[] = [
   { id: "flex", patient: "er", label: "Flexible medication", kind: "medication", role: "nurse", urgency: "routine", earliest: 355, latest: 390, baseline: 370, duration: 5, note: "Earlier and later starts allowed by the simulated order", approved: true },
   { id: "check", patient: "jw", label: "Routine nursing check", kind: "assessment", role: "nurse", urgency: "routine", earliest: 300, latest: 330, baseline: 300, duration: 3, note: "Bedside vitals check", approved: true },
   { id: "check-e", patient: "er", label: "Routine nursing check", kind: "assessment", role: "nurse", urgency: "routine", earliest: 300, latest: 330, baseline: 300, duration: 3, note: "Bedside vitals check" },
-  { id: "pre-m", patient: "mr", label: "Student preround", kind: "preround", role: "student", urgency: "routine", earliest: 285, latest: 330, baseline: 310, duration: 8, note: "Review overnight events and prepare for rounds", approved: true },
-  { id: "pre-e", patient: "er", label: "Student preround", kind: "preround", role: "student", urgency: "routine", earliest: 305, latest: 340, baseline: 325, duration: 8, note: "Review overnight events and prepare for rounds" },
-  { id: "pre-j", patient: "jw", label: "Student preround", kind: "preround", role: "student", urgency: "routine", earliest: 315, latest: 352, baseline: 340, duration: 8, note: "Review overnight events and prepare for rounds" },
-  { id: "round-m", patient: "mr", label: "Student rounds", kind: "round", role: "student", urgency: "routine", earliest: 420, latest: 449, baseline: 420, duration: 12, note: "Assigned to the medical student" },
-  { id: "round-e", patient: "er", label: "Student rounds", kind: "round", role: "student", urgency: "routine", earliest: 425, latest: 461, baseline: 440, duration: 12, note: "Assigned to the medical student" },
-  { id: "round-j", patient: "jw", label: "Student rounds", kind: "round", role: "student", urgency: "routine", earliest: 435, latest: 468, baseline: 460, duration: 12, note: "Assigned to the medical student" },
   { id: "resident", patient: "th", label: "Physician rounds", kind: "round", role: "physician", urgency: "elevated", earliest: 480, latest: 540, baseline: 510, duration: 15, note: "Adult medicine rounds", approved: true },
   { id: "chemo", patient: "np", label: "Chemotherapy readiness review", kind: "round", role: "physician", urgency: "elevated", earliest: 525, latest: 585, baseline: 540, duration: 15, note: "Simulated readiness review prior to treatment", approved: true },
   { id: "discharge-j", patient: "jw", label: "Discharge", kind: "discharge", role: "nurse", urgency: "routine", earliest: 630, latest: 690, baseline: 660, duration: 20, note: "Review discharge instructions and confirm transport after the discharge order.", approved: true },
@@ -107,11 +95,9 @@ export type WardState = {
   clock: { minute: number; playingSince: number | null };
   urgency: Partial<Record<string, Urgency>>;
   plan: Record<string, PlanEntry>;
-  proposals: Record<string, number>;
   visited: Partial<Record<Provider, string>>;
   completed: Record<string, number>;
   addedTasks?: Task[];
-  deadline: number;
   activities: Entry[];
 };
 export function initialState(): WardState {
@@ -119,10 +105,8 @@ export function initialState(): WardState {
     clock: { minute: START, playingSince: null },
     urgency: {},
     plan: structuredClone(DEFAULT_PLAN),
-    proposals: {},
-    visited: { physician: "station", nurse: "station", student: "station" },
+    visited: { physician: "station", nurse: "station" },
     completed: {},
-    deadline: 480,
     activities: [{ id: "start", minute: START, role: "physician", text: "Loaded the 24-hour care plan." }],
   };
 }
@@ -169,8 +153,7 @@ function buildBoard(state: WardState, wallTime: number, version: number, readSle
   const now = untouchedDemo ? START : clockMinute(state, wallTime);
   const sleepScores = new Map<string, number>();
   const careTasks = [...TASKS, ...(state.addedTasks ?? [])];
-  const roster = PATIENTS.filter((patient) => provider === "physician" || NURSING_COVERAGE.some(({ start }) => provider === assignedNurse(patient.nurse, start)) ||
-    provider === "student" && careTasks.some((task) => task.patient === patient.id && task.role === "student"));
+  const roster = PATIENTS.filter((patient) => provider === "physician" || NURSING_COVERAGE.some(({ start }) => provider === assignedNurse(patient.nurse, start)));
   const patients = roster.map(({ corridor, pulse, ...patient }) => {
     const { deepSleepScore, stage } = readSleep(patient.id, now);
     sleepScores.set(patient.id, deepSleepScore);
@@ -180,25 +163,25 @@ function buildBoard(state: WardState, wallTime: number, version: number, readSle
   });
   const tasks = careTasks.flatMap((task) => {
     const patient = patients.find((person) => person.id === task.patient);
-    if (!patient) return [];
+    // Older saved shifts can still contain tasks assigned to a retired role.
+    if (!patient || !Object.hasOwn(STAFF, task.role)) return [];
     const approval = state.plan[task.id] ?? DEFAULT_PLAN[task.id];
     const baseline = approval?.time ?? task.baseline;
     const priority = RANK[task.urgency] < RANK[patient.urgency] ? task.urgency : patient.urgency;
     const recommendation = suggest(task, baseline, now, patient.signal.stage, priority);
     const completedAt = state.completed[task.id];
-    const proposedAt = state.proposals[task.id];
     const assignedTo = task.role === "nurse"
       ? assignedNurse(patient.nurse, completedAt ?? approval?.time ?? recommendation.time ?? task.baseline)
       : task.role;
     const revision = completedAt === undefined && !approval?.locked && recommendation.time !== null && recommendation.time >= now && (!approval || recommendation.time !== approval.time);
     const note = task.id === "cmp" && completedAt !== undefined ? "Collected · result pending" : task.note;
-    return [{ ...task, assignedTo, note, priority, approval, proposedAt, completedAt, recommendation, revision }];
+    return [{ ...task, assignedTo, note, priority, approval, completedAt, recommendation, revision }];
   });
-  const lastRoom = (id: Provider) => patients.find((patient) => patient.room === state.visited[id])?.room ?? "station";
-  const activities = provider === "physician" ? state.activities : state.activities.filter((entry) =>
-    entry.provider === provider || patients.some((patient) => patient.id === entry.patientId));
+  const lastRoom = patients.find((patient) => patient.room === state.visited[provider])?.room ?? "station";
+  const activities = state.activities.filter((entry) => Object.hasOwn(STAFF, entry.role) &&
+    (provider === "physician" || entry.provider === provider || patients.some((patient) => patient.id === entry.patientId)));
   const board = { now, version, provider, playing: state.clock.playingSince !== null && now < END, patients, tasks,
-    deadline: state.deadline, lastRoom: lastRoom(provider), studentRoom: lastRoom("student"), activities };
+    lastRoom, activities };
   return { board, sleepScores };
 }
 
@@ -234,38 +217,16 @@ function rankVisits(board: ReturnType<typeof buildBoard>["board"], sleepScores: 
   return choices.map(({ sleep, ...visit }) => visit);
 }
 
-export function studentRoute(board: Snapshot) {
-  let room: string = board.studentRoom;
-  let finish = board.now;
-  let walkingMinutes = 0;
-  const rounds = board.tasks.filter(isStudentRound);
-  const pending = rounds.filter((task) => task.completedAt === undefined)
-    .map((task) => ({ ...task, planned: task.proposedAt ?? task.approval?.time ?? task.recommendation.time ?? task.baseline }))
-    .sort((a, b) => a.planned - b.planned || a.latest - b.latest);
-  const visits = pending.map((task) => {
-    const patient = board.patients.find((person) => person.id === task.patient)!;
-    const walk = walking(room, patient.room);
-    const start = Math.max(finish + walk, task.planned, task.earliest);
-    finish = start + task.duration;
-    walkingMinutes += walk;
-    room = patient.room;
-    return { task: task.id, kind: task.kind, patient, walk, start, finish, conflict: start > task.latest, proposed: task.proposedAt !== undefined };
-  });
-  if (visits.length === 0) finish = Math.max(START, ...rounds.map((task) => task.completedAt ?? START));
-  return { visits, finish, walkingMinutes, late: finish > board.deadline || visits.some((visit) => visit.conflict) };
-}
-
 export type Action = {
-  type: "addTask" | "priority" | "approve" | "edit" | "acceptProposal" | "approveShift" | "lock" | "deadline" | "visit" | "complete" | "advance" | "play" | "pause" | "dawn" | "reset";
+  type: "addTask" | "priority" | "approve" | "edit" | "approveShift" | "lock" | "visit" | "complete" | "advance" | "play" | "pause" | "dawn" | "reset";
   provider: Provider; version: number; id?: string; room?: string; time?: number; urgency?: Urgency; draft?: TaskDraft;
 };
-export function canChange(role: Role, task: Snapshot["tasks"][number]) {
-  if (task.completedAt !== undefined) return false;
-  if (task.approval?.locked) return false;
-  return role !== "student" || task.role === "student";
+export function canChange(task: Snapshot["tasks"][number]) {
+  return task.completedAt === undefined && !task.approval?.locked;
 }
 export function applyAction(state: WardState, action: Action, wallTime: number, readSleep: ReadSleep) {
   const { provider } = action;
+  if (!Object.hasOwn(PROVIDERS, provider)) throw new Error("Invalid provider.");
   const { role } = PROVIDERS[provider];
   const { board } = buildBoard(state, wallTime, action.version, readSleep, provider);
   const now = board.now;
@@ -283,7 +244,6 @@ export function applyAction(state: WardState, action: Action, wallTime: number, 
       const note = draft.note.trim();
       if (!label || label.length > 80 || note.length > 500) throw new Error("Enter a task name of up to 80 characters and notes of up to 500 characters.");
       if (!Object.hasOwn(TASK_KINDS, kind) || !Object.hasOwn(STAFF, assignee) || !Object.hasOwn(RANK, urgency)) throw new Error("Choose an allowed task type, provider and priority.");
-      if (role === "student" && (assignee !== "student" || urgency !== "routine")) throw new Error("Students can propose routine tasks assigned to themselves.");
       const { start, end } = taskBounds(kind);
       if (![earliest, latest, baseline, duration].every(Number.isInteger) || duration < 1 || earliest < start || baseline < Math.max(now, earliest) || baseline > latest || latest + duration > end) {
         throw new Error("Choose a start within the allowed window and leave enough time to finish by the end of the period.");
@@ -291,29 +251,22 @@ export function applyAction(state: WardState, action: Action, wallTime: number, 
       const id = crypto.randomUUID();
       const added = { id, patient: patient.id, label, kind, role: assignee, urgency, earliest, latest, baseline, duration, note };
       (next.addedTasks ??= []).push(added);
-      if (role === "student") next.proposals[id] = baseline;
-      log = `${role === "student" ? "Proposed" : "Added"} ${label} for ${patient.name}.`;
+      log = `Added ${label} for ${patient.name}.`;
       break;
     }
     case "priority":
-      if (role === "student" || !patient || !action.urgency || !Object.hasOwn(RANK, action.urgency)) throw new Error("Choose a patient and an allowed priority.");
+      if (!patient || !action.urgency || !Object.hasOwn(RANK, action.urgency)) throw new Error("Choose a patient and an allowed priority.");
       next.urgency[patient.id] = action.urgency;
       log = `${patient.name} set to ${PRIORITIES[action.urgency].toLowerCase()}.`;
       break;
     case "edit":
-    case "approve":
-    case "acceptProposal": {
-      if (!task || !canChange(role, task)) throw new Error("This role cannot change the selected task.");
-      if (action.type === "acceptProposal" && role === "student") throw new Error("A physician or nurse must approve student proposals.");
-      const time = action.type === "acceptProposal" ? task.proposedAt : action.time;
+    case "approve": {
+      if (!task || !canChange(task)) throw new Error("The selected task cannot be changed.");
+      const time = action.time;
       if (!Number.isInteger(time) || time! < Math.max(now, task.earliest) || time! > task.latest) throw new Error("Choose a future time inside the authorized window.");
       if (action.type === "approve" && time !== task.recommendation.time) throw new Error("The live suggestion changed. Review the refreshed time.");
-      if (role === "student") next.proposals[task.id] = time!;
-      else {
-        next.plan[task.id] = { time: time!, by: role, locked: task.earliest === task.latest };
-        delete next.proposals[task.id];
-      }
-      log = `${role === "student" ? "Proposed" : "Approved"} ${task.label.toLowerCase()} for ${timeLabel(time!)}.`;
+      next.plan[task.id] = { time: time!, by: role, locked: task.earliest === task.latest };
+      log = `Approved ${task.label.toLowerCase()} for ${timeLabel(time!)}.`;
       break;
     }
     case "approveShift": {
@@ -322,7 +275,6 @@ export function applyAction(state: WardState, action: Action, wallTime: number, 
       if (drafts.length === 0) throw new Error("The shift has no eligible drafts to approve.");
       for (const draft of drafts) {
         next.plan[draft.id] = { time: draft.recommendation.time!, by: role, locked: draft.earliest === draft.latest };
-        delete next.proposals[draft.id];
       }
       log = `Approved ${drafts.length} draft tasks in the shift plan.`;
       break;
@@ -331,11 +283,6 @@ export function applyAction(state: WardState, action: Action, wallTime: number, 
       if (role !== "physician" || !task?.approval || task.earliest === task.latest || task.completedAt !== undefined) throw new Error("A physician can lock or unlock an approved flexible task.");
       next.plan[task.id] = { ...task.approval, locked: !task.approval.locked };
       log = `${next.plan[task.id].locked ? "Locked" : "Unlocked"} ${task.label.toLowerCase()}.`;
-      break;
-    case "deadline":
-      if (role === "student" || !Number.isInteger(action.time) || action.time! < now || action.time! > ROUNDS.end) throw new Error("Choose a future deadline by noon.");
-      next.deadline = action.time!;
-      log = `Student rounds deadline set to ${timeLabel(next.deadline)}.`;
       break;
     case "visit":
       if (!action.room || !board.patients.some((person) => person.room === action.room)) throw new Error("Choose an assigned room.");

@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
-import { ArrowUpRight, Check, LockKeyhole, Pause, Play, Plus, RotateCcw } from "lucide-react";
+import { ArrowUpRight, Check, LockKeyhole, Pause, Play, RotateCcw } from "lucide-react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { calendarSelection, eventTime, layoutEvents, SLOT_MINUTES } from "../lib/calendar";
-import { END, NURSING_COVERAGE, PROVIDERS, TASK_KINDS, timeLabel, type Snapshot } from "../lib/ward";
+import { END, TASK_KINDS, timeLabel, type Snapshot } from "../lib/ward";
 
 const TICKS = Array.from({ length: END / 15 }, (_, index) => index * 15);
 const offset = (minute: number) => (minute / END) * 100 + "%";
@@ -16,13 +16,34 @@ export function ShiftClock({ now, playing, busy, toggle, advance, children }: {
   return <div className="calendar-controls" role="group" aria-label="Shift clock">
     <time className="clock-now">{timeLabel(now)}</time>
     <Button variant="outline" size="icon-sm" disabled={disabled} onClick={toggle} aria-label={playbackLabel} title={playbackLabel}>{playing ? <Pause /> : <Play />}</Button>
-    <Button variant="outline" size="sm" disabled={disabled} onClick={advance}>+5 min</Button>
+    <Button variant="outline" size="sm" disabled={disabled} onClick={advance} data-tour="advance">+5 min</Button>
     {children}
   </div>;
 }
 
-export function ShiftCalendar({ board, busy, reset, dawn, toggle, advance, approveDrafts, onSelect, onAdd }: {
+export function CalendarControls({ board, busy, reset, dawn, toggle, advance, approveDrafts }: {
   board: Snapshot; busy: boolean; reset?: () => void; dawn?: () => void; toggle: () => void; advance: () => void; approveDrafts?: () => void;
+}) {
+  return <>
+    <div className="sidebar-group">
+      <h2>Shift clock</h2>
+      <ShiftClock now={board.now} playing={board.playing} busy={busy} toggle={toggle} advance={advance}>
+        {reset && <Button variant="outline" size="icon-sm" disabled={busy} onClick={reset} aria-label="Reset shift" title="Reset shift"><RotateCcw /></Button>}
+        {dawn && <Button variant="outline" size="sm" disabled={busy} onClick={dawn}>4:55 AM demo</Button>}
+        {approveDrafts && <Button className="approve-drafts" size="sm" disabled={busy} onClick={approveDrafts}>Approve shift drafts</Button>}
+      </ShiftClock>
+    </div>
+    <div className="sidebar-group">
+      <h2>Task colors</h2>
+      <ul className="calendar-key">
+        {Object.entries(TASK_KINDS).map(([kind, label]) => <li key={kind} className={`kind-${kind}`}><i aria-hidden="true" />{label}</li>)}
+      </ul>
+    </div>
+  </>;
+}
+
+export function ShiftCalendar({ board, busy, onSelect, onAdd }: {
+  board: Snapshot; busy: boolean;
   onSelect: (patientId: string, taskId?: string) => void; onAdd: (patientId: string, minute: number, duration?: number) => void;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -31,7 +52,6 @@ export function ShiftCalendar({ board, busy, reset, dawn, toggle, advance, appro
   const drag = useRef<{ patient: string; pointerId: number; anchor: number; y: number } | null>(null);
   const [selection, setSelection] = useState<{ patient: string; start: number; duration: number }>();
   const earliest = Math.ceil(board.now / SLOT_MINUTES) * SLOT_MINUTES;
-  const ended = board.now >= END;
 
   useLayoutEffect(() => {
     const previous = lastMinute.current;
@@ -76,43 +96,20 @@ export function ShiftCalendar({ board, busy, reset, dawn, toggle, advance, appro
   }
 
   return <section className="shift-calendar" aria-label="24-hour shift calendar">
-    <header className="calendar-toolbar">
-      <div className="calendar-key" aria-label="Task colors">
-        {Object.entries(TASK_KINDS).map(([kind, label]) => <span key={kind} className={`kind-${kind}`}><i />{label}</span>)}
-      </div>
-      <ShiftClock now={board.now} playing={board.playing} busy={busy} toggle={toggle} advance={advance}>
-        {dawn && <Button variant="outline" size="sm" disabled={busy} onClick={dawn}>4:55 AM demo</Button>}
-        {reset && <Button variant="outline" size="icon-sm" disabled={busy} onClick={reset} aria-label="Reset shift" title="Reset shift"><RotateCcw /></Button>}
-        {approveDrafts && <Button size="sm" disabled={busy} onClick={approveDrafts}>Approve shift drafts</Button>}
-      </ShiftClock>
-    </header>
     <div ref={viewport} className="calendar-scroll" role="region" tabIndex={0} aria-label="Midnight to midnight time grid">
-      <div className="calendar-grid" style={{ gridTemplateColumns: `76px 144px repeat(${board.patients.length}, minmax(142px, 1fr))`, gridTemplateRows: `var(--calendar-header) calc(${TICKS.length} * var(--interval))` }}>
+      <div className="calendar-grid" style={{ gridTemplateColumns: `76px repeat(${board.patients.length}, minmax(142px, 1fr))`, gridTemplateRows: `var(--calendar-header) calc(${TICKS.length} * var(--interval))` }}>
         <div className="calendar-corner">Time</div>
-        <div className="coverage-heading">Nursing shifts</div>
-        {board.patients.map((patient) => <div className="calendar-room" key={patient.id}>
-          <button className="room-details" onClick={() => onSelect(patient.id)} aria-label={`Room ${patient.room}, ${patient.name}, patient details`}>
-            <span className="room-label">Room {patient.room}{patient.urgency === "critical" && <Badge variant="outline" className="room-urgent">Rapid decline</Badge>}</span>
+        {board.patients.map((patient, index) => <div className="calendar-room" key={patient.id}>
+          <button className="room-details" onClick={() => onSelect(patient.id)} data-tour={index === 0 ? "calendar-headings" : `room-${patient.id}`}>
             <strong>{patient.name}</strong>
+            <span className="room-label">Room {patient.room}</span>
             <small>{patient.signal.stage}</small>
           </button>
-          {!ended && <Button variant="ghost" size="icon-xs" className="room-add" aria-label={`Add task for ${patient.name}`} title="Add task" disabled={busy} onClick={() => onAdd(patient.id, board.now)}><Plus /></Button>}
         </div>)}
         <div ref={ruler} className="calendar-ruler">
           {TICKS.filter((minute) => Math.abs(minute - board.now) >= 7).map((minute) =>
             <time key={minute} className={minute % 60 === 0 ? "hour-label" : undefined} style={{ top: offset(minute) }}>{timeLabel(minute)}</time>)}
           <span className="calendar-now-label" style={{ top: offset(board.now) }}>{timeLabel(board.now)}</span>
-        </div>
-        <div className="calendar-lane staffing-lane">
-          {NURSING_COVERAGE.map((shift) => <div key={shift.start} className="coverage-block" data-shift={shift.label}
-            style={{ top: offset(shift.start), height: offset(shift.end - shift.start) }}>
-            <div className="coverage-details">
-              <strong>{shift.label}</strong>
-              <small>{shift.hours}</small>
-              {shift.nurses.map((id) => <span key={id}>{PROVIDERS[id].name}</span>)}
-            </div>
-          </div>)}
-          <div className="calendar-now-line" style={{ top: offset(board.now) }} aria-hidden="true" />
         </div>
         {board.patients.map((patient) => <div className={earliest < END ? "calendar-lane can-schedule" : "calendar-lane"} key={patient.id}
           onPointerDown={(event) => selectSlot(event, patient.id)} onPointerMove={(event) => updateSlot(event, false)}
@@ -138,7 +135,7 @@ export function ShiftCalendar({ board, busy, reset, dawn, toggle, advance, appro
             const description = [task.label, patient.name, timeLabel(time), status, moveLabel === status ? undefined : moveLabel].filter(Boolean).join(", ");
             const appearance = completed ? "event-done" : draft ? "event-draft" : "";
             const visibleMinutes = Math.min(displayMinutes, END - time);
-            return <button className={`calendar-event kind-${task.kind} ${appearance}`} key={task.id} onClick={() => onSelect(patient.id, task.id)} title={description}
+            return <button className={`calendar-event kind-${task.kind} ${appearance}`} key={task.id} onClick={() => onSelect(patient.id, task.id)} title={description} data-tour={task.id}
               style={{ top: offset(time), height: offset(visibleMinutes), left: lane / lanes * 100 + "%", width: 100 / lanes + "%" }}
               aria-label={description}>
               <span className="event-meta"><time>{timeLabel(time)}</time>

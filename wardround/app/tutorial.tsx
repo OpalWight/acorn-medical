@@ -179,14 +179,16 @@ export function Tutorial({ index, exit, advance }: { index: number; exit: () => 
         <span className="tutorial-sprite" aria-hidden="true" style={{
           "--sprite-x": `${step.pose * 100 / 3}%`, "--sprite-y": `${step.speaker * 50}%`,
         } as CSSProperties} />
-        <div className="tutorial-words" aria-live="polite" aria-atomic="true">
-          <strong>{speakers[step.speaker]}</strong>
-          <p>{step.text}</p>
-        </div>
-        <div className="tutorial-actions">
-          <button className="button tutorial-skip" type="button" onClick={exit}>Skip tutorial</button>
-          {!step.action && <button className="button solid tutorial-continue" type="button" disabled={step.input && !nameReady}
-            onClick={done ? exit : advance}>{step.button ?? "Continue"}</button>}
+        <div className="tutorial-bubble">
+          <div className="tutorial-words" aria-live="polite" aria-atomic="true">
+            <strong>{speakers[step.speaker]}</strong>
+            <p>{step.text}</p>
+          </div>
+          <div className="tutorial-actions">
+            <button className="tutorial-skip" type="button" onClick={exit}>Skip tutorial</button>
+            {!step.action && <button className="tutorial-continue" type="button" disabled={step.input && !nameReady}
+              onClick={done ? exit : advance}>{step.button ?? "Continue"}</button>}
+          </div>
         </div>
       </div>
     </section>
